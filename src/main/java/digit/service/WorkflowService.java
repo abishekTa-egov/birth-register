@@ -5,7 +5,8 @@ import digit.config.BTRConfiguration;
 import digit.repository.ServiceRequestRepository;
 import digit.web.models.*;
 import lombok.extern.slf4j.Slf4j;
-import org.egov.common.contract.models.Workflow;
+//import org.egov.common.contract.models.Workflow;
+import digit.web.models.Workflow;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.models.RequestInfoWrapper;
 import org.egov.common.contract.request.User;
@@ -37,7 +38,8 @@ public class WorkflowService {
         birthRegistrationRequest.getBirthRegistrationApplications().forEach(application -> {
             ProcessInstance processInstance = getProcessInstanceForBTR(application, birthRegistrationRequest.getRequestInfo());
             ProcessInstanceRequest workflowRequest = new ProcessInstanceRequest(birthRegistrationRequest.getRequestInfo(), Collections.singletonList(processInstance));
-            callWorkFlow(workflowRequest);
+            State curstate=callWorkFlow(workflowRequest);
+            application.getWorkflow().setStatus(curstate.getState());
         });
     }
 
@@ -78,26 +80,31 @@ public class WorkflowService {
 
     }
 
-    public ProcessInstance getCurrentWorkflow(RequestInfo requestInfo, String tenantId, String businessId) {
-
+    public ProcessInstance getCurrWorkflow(RequestInfo requestInfo, BirthRegistrationApplication application) {
         RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
 
-        StringBuilder url = getSearchURLWithParams(tenantId, businessId);
+        String tenantId = application.getTenantId();
+        String businessId = application.getApplicationNumber();
+
+        StringBuilder url = new StringBuilder(config.getWfHost().concat(config.getWfProcessInstanceSearchPath()));
+        url.append("?tenantId=").append(tenantId);
+        url.append("&businessIds=").append(businessId);
 
         Object res = repository.fetchResult(url, requestInfoWrapper);
         ProcessInstanceResponse response = null;
 
-        try{
+        try {
             response = mapper.convertValue(res, ProcessInstanceResponse.class);
-        }
-        catch (Exception e){
-            throw new CustomException("PARSING_ERROR","Failed to parse workflow search response");
+        } catch (Exception e) {
+            throw new CustomException("PARSING_ERROR", "Failed to parse workflow search response");
         }
 
-        if(response!=null && !CollectionUtils.isEmpty(response.getProcessInstances()) && response.getProcessInstances().get(0)!=null)
+
+        if (response != null && !CollectionUtils.isEmpty(response.getProcessInstances())) {
             return response.getProcessInstances().get(0);
-
-        return null;
+        } else {
+            throw new CustomException("WORKFLOW_NOT_FOUND", "No workflow found for the application");
+        }
     }
 
     private BusinessService getBusinessService(BirthRegistrationApplication application, RequestInfo requestInfo) {

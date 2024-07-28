@@ -8,8 +8,10 @@ import digit.validators.BirthApplicationValidator;
 import digit.web.models.BirthApplicationSearchCriteria;
 import digit.web.models.BirthRegistrationApplication;
 import digit.web.models.BirthRegistrationRequest;
+import digit.web.models.Workflow;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
+import org.egov.common.contract.workflow.ProcessInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
@@ -72,7 +74,18 @@ public class BirthRegistrationService {
         applications.forEach(application -> {
             enrichmentUtil.enrichFatherApplicantOnSearch(application);
             enrichmentUtil.enrichMotherApplicantOnSearch(application);
+            ProcessInstance obj=workflowService.getCurrWorkflow(requestInfo, application);
+
+            Workflow workflow = new Workflow();
+            workflow.setStatus(obj.getState().getState());
+            workflow.setComments(obj.getComment());
+            workflow.setDocuments(obj.getDocuments());
+            workflow.setAction(obj.getAction());
+
+            application.setWorkflow(workflow);
         });
+
+
 
         // Otherwise return the found applications
         return applications;
@@ -83,13 +96,14 @@ public class BirthRegistrationService {
         BirthRegistrationApplication existingApplication = validator.validateApplicationExistence(birthRegistrationRequest.getBirthRegistrationApplications().get(0));
         existingApplication.setWorkflow(birthRegistrationRequest.getBirthRegistrationApplications().get(0).getWorkflow());
         log.info(existingApplication.toString());
-        birthRegistrationRequest.setBirthRegistrationApplications(Collections.singletonList(existingApplication));
-
+        System.out.println("hi ->"+ existingApplication.toString());
+      //  birthRegistrationRequest.setBirthRegistrationApplications(Collections.singletonList(existingApplication));
+        //System.out.println("applic1 ->"+birthRegistrationRequest);
         // Enrich application upon update
         enrichmentUtil.enrichBirthApplicationUponUpdate(birthRegistrationRequest);
 
         workflowService.updateWorkflowStatus(birthRegistrationRequest);
-
+        //System.out.println("applic2 ->"+birthRegistrationRequest);
         // Just like create request, update request will be handled asynchronously by the persister
         producer.push("update-bt-application", birthRegistrationRequest);
 
